@@ -168,17 +168,6 @@ public class RequestInspectionController {
         return headers;
     }
 
-    private Map<String, String> extractQueryParameters(HttpServletRequest request) {
-        Map<String, String> params = new HashMap<>();
-        Map<String, String[]> parameterMap = request.getParameterMap();
-        for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
-            if (entry.getValue().length > 0) {
-                params.put(entry.getKey(), entry.getValue()[0]);
-            }
-        }
-        return params;
-    }
-
     private String getFullUrl(HttpServletRequest request) {
         StringBuffer url = request.getRequestURL();
         String queryString = request.getQueryString();
