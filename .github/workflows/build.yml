@@ -29,5 +29,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: mem-limit-test-jar
-        path: target/*.jar
+        path: target/mem-limit-test-*.jar
         retention-days: 30
