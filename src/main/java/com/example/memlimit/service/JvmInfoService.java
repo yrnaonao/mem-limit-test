@@ -60,16 +60,23 @@ public class JvmInfoService {
         MemoryUsage nonHeapMemoryUsage = memoryMXBean.getNonHeapMemoryUsage();
         
         log.info("Heap Memory:");
-        log.info("  Initial:   {} MB", heapMemoryUsage.getInit() / (1024 * 1024));
-        log.info("  Used:      {} MB", heapMemoryUsage.getUsed() / (1024 * 1024));
-        log.info("  Committed: {} MB", heapMemoryUsage.getCommitted() / (1024 * 1024));
-        log.info("  Max:       {} MB", heapMemoryUsage.getMax() / (1024 * 1024));
+        log.info("  Initial:   {} MB", formatMemory(heapMemoryUsage.getInit()));
+        log.info("  Used:      {} MB", formatMemory(heapMemoryUsage.getUsed()));
+        log.info("  Committed: {} MB", formatMemory(heapMemoryUsage.getCommitted()));
+        log.info("  Max:       {} MB", formatMemory(heapMemoryUsage.getMax()));
         
         log.info("Non-Heap Memory:");
-        log.info("  Initial:   {} MB", nonHeapMemoryUsage.getInit() / (1024 * 1024));
-        log.info("  Used:      {} MB", nonHeapMemoryUsage.getUsed() / (1024 * 1024));
-        log.info("  Committed: {} MB", nonHeapMemoryUsage.getCommitted() / (1024 * 1024));
-        log.info("  Max:       {} MB", nonHeapMemoryUsage.getMax() / (1024 * 1024));
+        log.info("  Initial:   {} MB", formatMemory(nonHeapMemoryUsage.getInit()));
+        log.info("  Used:      {} MB", formatMemory(nonHeapMemoryUsage.getUsed()));
+        log.info("  Committed: {} MB", formatMemory(nonHeapMemoryUsage.getCommitted()));
+        log.info("  Max:       {} MB", formatMemory(nonHeapMemoryUsage.getMax()));
+    }
+    
+    private String formatMemory(long bytes) {
+        if (bytes < 0) {
+            return "undefined";
+        }
+        return String.valueOf(bytes / (1024 * 1024));
     }
 
     private void printGcInfo() {
@@ -112,14 +119,27 @@ public class JvmInfoService {
     private void detectContainerEnvironment() {
         log.info("\n--- Container Environment Detection ---");
         
-        boolean isInDocker = false;
-        boolean isInKubernetes = false;
+        boolean isInDocker = isDockerEnvironment();
+        boolean isInKubernetes = isKubernetesEnvironment();
         
-        // Check for Docker environment
+        if (isInDocker) {
+            log.info("Running in Docker container");
+        }
+        if (isInKubernetes) {
+            String k8sServiceHost = System.getenv("KUBERNETES_SERVICE_HOST");
+            log.info("Running in Kubernetes (detected via KUBERNETES_SERVICE_HOST: {})", k8sServiceHost);
+        }
+        
+        if (!isInDocker && !isInKubernetes) {
+            log.info("Not running in a detected container environment");
+        }
+    }
+    
+    private boolean isDockerEnvironment() {
+        // Check for Docker environment via /.dockerenv
         File dockerEnv = new File("/.dockerenv");
         if (dockerEnv.exists()) {
-            isInDocker = true;
-            log.info("Running in Docker container (detected via /.dockerenv)");
+            return true;
         }
         
         // Check /proc/1/cgroup for container indicators
@@ -128,9 +148,7 @@ public class JvmInfoService {
                 List<String> lines = Files.readAllLines(Paths.get("/proc/1/cgroup"));
                 for (String line : lines) {
                     if (line.contains("docker") || line.contains("containerd")) {
-                        isInDocker = true;
-                        log.info("Running in Docker container (detected via /proc/1/cgroup)");
-                        break;
+                        return true;
                     }
                 }
             }
@@ -138,16 +156,12 @@ public class JvmInfoService {
             log.debug("Could not read /proc/1/cgroup: {}", e.getMessage());
         }
         
-        // Check for Kubernetes environment
+        return false;
+    }
+    
+    private boolean isKubernetesEnvironment() {
         String k8sServiceHost = System.getenv("KUBERNETES_SERVICE_HOST");
-        if (k8sServiceHost != null && !k8sServiceHost.isEmpty()) {
-            isInKubernetes = true;
-            log.info("Running in Kubernetes (detected via KUBERNETES_SERVICE_HOST: {})", k8sServiceHost);
-        }
-        
-        if (!isInDocker && !isInKubernetes) {
-            log.info("Not running in a detected container environment");
-        }
+        return k8sServiceHost != null && !k8sServiceHost.isEmpty();
     }
 
     public Map<String, Object> getJvmInfo() {
@@ -206,9 +220,8 @@ public class JvmInfoService {
         
         // Container Environment
         Map<String, Object> containerInfo = new HashMap<>();
-        File dockerEnv = new File("/.dockerenv");
-        containerInfo.put("isDocker", dockerEnv.exists());
-        containerInfo.put("isKubernetes", System.getenv("KUBERNETES_SERVICE_HOST") != null);
+        containerInfo.put("isDocker", isDockerEnvironment());
+        containerInfo.put("isKubernetes", isKubernetesEnvironment());
         info.put("container", containerInfo);
         
         return info;
